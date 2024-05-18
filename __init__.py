@@ -8,6 +8,10 @@ from .find_port import find_comfyui_port
 import server
 from aiohttp import web
 
+NODE_CLASS_MAPPINGS = {}
+NODE_DISPLAY_NAME_MAPPINGS = {}
+__all__ = ['NODE_CLASS_MAPPINGS', 'NODE_DISPLAY_NAME_MAPPINGS']
+
 port = "8188"
 SERVER_ADDRESS = f"127.0.0.1:{port}"
 
