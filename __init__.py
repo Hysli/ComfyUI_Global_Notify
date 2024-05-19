@@ -4,6 +4,7 @@ import aiohttp
 import time
 import base64
 import asyncio
+import boto3
 from .find_port import find_comfyui_port
 import server
 from aiohttp import web
@@ -63,7 +64,26 @@ async def get_history(prompt_id):
         async with session.get(f"http://{SERVER_ADDRESS}/history/{prompt_id}") as response:
             return await response.json()
 
-async def get_images(prompt_id):
+async def upload_to_s3(base64_image, s3_config):
+    s3 = boto3.client(
+        service_name="s3",
+        endpoint_url=s3_config['endpoint_url'],
+        aws_access_key_id=s3_config['aws_access_key_id'],
+        aws_secret_access_key=s3_config['aws_secret_access_key'],
+        region_name=s3_config['region_name'],
+    )
+    
+    image_data = base64.b64decode(base64_image.split(',')[1])
+    file_key_name = f"{s3_config['folder']}/{time.time()}.png"
+
+    try:
+        s3.upload_fileobj(io.BytesIO(image_data), s3_config['bucket_name'], file_key_name)
+        return f"{s3_config['bucket_url']}/{file_key_name}"
+    except Exception as e:
+        print(f"Error uploading image to S3: {str(e)}")
+        return None
+
+async def get_images(prompt_id, s3_config):
     """Retrieve image data based on the given prompt."""
     output_images = {}
     
@@ -82,16 +102,20 @@ async def get_images(prompt_id):
                     for image in node_output['images']:
                         image_data = await get_image(image['filename'], image['subfolder'], image['type'])
                         base64_image = "data:image/png;base64," + base64.b64encode(image_data).decode('utf-8')
-                        images_output.append(base64_image)
+                        if s3_config['enabled']:
+                            s3_url = await upload_to_s3(base64.b64encode(image_data).decode('utf-8'), s3_config)
+                            images_output.append(s3_url)
+                        else:
+                            images_output.append(base64_image)
                 output_images[node_id] = images_output
             return {"prompt_id": prompt_id, "status": "success", "images": output_images}
         else:
             return {"prompt_id": prompt_id, "status": "failed", "message": "Execution status is not success."}
 
-async def send_callback(res_task, callback_url):
+async def send_callback(res_task, callback_url, s3_config):
     global start_time
     global end_time
-    result = await get_images(res_task['prompt_id'])
+    result = await get_images(res_task['prompt_id'], s3_config)
     end_time = time.time()
     total_time = end_time - start_time
     result["total_time"] = total_time
@@ -107,10 +131,20 @@ async def prompt_queue(request):
         data = await request.json()  # Get POST data from the request
         prompt = data['prompt']
         callback_url = data['callback_url']
+        s3_config = data.get('s3_config', {
+            'enabled': False,
+            'endpoint_url': '',
+            'aws_access_key_id': '',
+            'aws_secret_access_key': '',
+            'region_name': '',
+            'bucket_name': '',
+            'folder': '',
+            'bucket_url': ''
+        })
         global start_time
         start_time = time.time()
         res_task = await queue_prompt(prompt)
-        asyncio.create_task(send_callback(res_task, callback_url))
+        asyncio.create_task(send_callback(res_task, callback_url, s3_config))
         return web.json_response(res_task)
     except Exception as e:
         return web.Response(text=json.dumps({"error": str(e)}), status=500)
