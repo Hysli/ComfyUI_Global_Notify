@@ -118,3 +118,20 @@ curl --location --request POST 'http://192.168.10.13:46539/prompt_queue' \
     "callback_url": "https://example.com/comfyui_callback"
 }'
 ```
+
+```json
+{
+    "prompt": "your_prompt_here",
+    "callback_url": "http://your_callback_url_here",
+    "s3_config": {
+        "enabled": true,
+        "endpoint_url": "https://your_s3_endpoint_here",
+        "aws_access_key_id": "your_access_key_id_here",
+        "aws_secret_access_key": "your_secret_access_key_here",
+        "region_name": "your_region_name_here",
+        "bucket_name": "your_bucket_name_here",
+        "folder": "your_folder_name_here", 
+        "bucket_url": "https://your_bucket_url_here"
+    }
+}
+```
