@@ -1,7 +1,9 @@
 import json
 import os
+import io
 import aiohttp
 import time
+from datetime import datetime
 import base64
 import asyncio
 import boto3
@@ -27,7 +29,7 @@ def read_server_address():
     if os.path.exists(server_address_file):
         with open(server_address_file, 'r') as f:
             SERVER_ADDRESS = f.read().strip()
-    print("Read SERVER_ADDRESS from file:", SERVER_ADDRESS)
+    # print("Read SERVER_ADDRESS from file:", SERVER_ADDRESS)
 
 read_server_address()
 
@@ -36,7 +38,7 @@ def update_server_address():
     comfyui_port = find_comfyui_port()
     if comfyui_port:
         SERVER_ADDRESS = f"127.0.0.1:{comfyui_port}"
-    print("Updated SERVER_ADDRESS:", SERVER_ADDRESS)
+    # print("Updated SERVER_ADDRESS:", SERVER_ADDRESS)
 
 def write_server_address():
     with open(server_address_file, 'w') as f:
@@ -44,7 +46,7 @@ def write_server_address():
 
 async def queue_prompt(prompt):
     update_server_address()
-    write_server_address()  # 写入文件
+    write_server_address()
     """Submit prompt to the server and return the server response."""
     data = json.dumps({"prompt": prompt}).encode('utf-8')
     async with aiohttp.ClientSession() as session:
@@ -64,7 +66,7 @@ async def get_history(prompt_id):
         async with session.get(f"http://{SERVER_ADDRESS}/history/{prompt_id}") as response:
             return await response.json()
 
-async def upload_to_s3(base64_image, s3_config):
+async def upload_to_s3(base64_image, s3_config, prompt_id):
     s3 = boto3.client(
         service_name="s3",
         endpoint_url=s3_config['endpoint_url'],
@@ -72,9 +74,13 @@ async def upload_to_s3(base64_image, s3_config):
         aws_secret_access_key=s3_config['aws_secret_access_key'],
         region_name=s3_config['region_name'],
     )
-    
+
     image_data = base64.b64decode(base64_image.split(',')[1])
-    file_key_name = f"{s3_config['folder']}/{time.time()}.png"
+    current_timestamp = time.time()
+    current_datetime = datetime.fromtimestamp(current_timestamp)
+    formatted_date = current_datetime.strftime('%Y-%m-%d')
+    timestamp_int = int(current_timestamp)
+    file_key_name = f"{s3_config['folder']}/{formatted_date}/{prompt_id}_{timestamp_int}.png"
 
     try:
         s3.upload_fileobj(io.BytesIO(image_data), s3_config['bucket_name'], file_key_name)
@@ -103,7 +109,7 @@ async def get_images(prompt_id, s3_config):
                         image_data = await get_image(image['filename'], image['subfolder'], image['type'])
                         base64_image = "data:image/png;base64," + base64.b64encode(image_data).decode('utf-8')
                         if s3_config['enabled']:
-                            s3_url = await upload_to_s3(base64.b64encode(image_data).decode('utf-8'), s3_config)
+                            s3_url = await upload_to_s3(base64_image, s3_config, prompt_id)
                             images_output.append(s3_url)
                         else:
                             images_output.append(base64_image)
@@ -123,7 +129,10 @@ async def send_callback(res_task, callback_url, s3_config):
     headers = {'content-type': 'application/json'}
     async with aiohttp.ClientSession() as session:
         async with session.post(callback_url, data=data, headers=headers) as response:
-            pass
+            if response.status == 200:
+                print("Callback successful")
+            else:
+                print(f"Callback failed with status code: {response.status}")
 
 @server.PromptServer.instance.routes.post("/prompt_queue")
 async def prompt_queue(request):
