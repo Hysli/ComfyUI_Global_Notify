@@ -6,10 +6,10 @@ import locale
 import traceback
 import re
 
-# 获取当前文件所在目录
+# Get the current file's directory
 root_path = os.path.dirname(os.path.abspath(__file__))
 
-# 处理子进程的输出流
+# Handle the output stream of the subprocess
 def handle_stream(stream, is_stdout):
     stream.reconfigure(encoding=locale.getpreferredencoding(), errors='replace')
     for msg in stream:
@@ -18,7 +18,7 @@ def handle_stream(stream, is_stdout):
         else:
             print(msg, end="", file=sys.stderr)
 
-# 包装子进程执行命令
+# Wrap the subprocess execution command
 def process_wrap(cmd_str, cwd=None, handler=None):
     print(f"EXECUTE: {cmd_str} in '{cwd}'")
     process = subprocess.Popen(cmd_str, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1)
@@ -37,10 +37,10 @@ def process_wrap(cmd_str, cwd=None, handler=None):
 
     return process.wait()
 
-# 已安装的包列表
+# List of installed packages
 pip_list = None
 
-# 获取已安装的 pip 包
+# Get installed pip packages
 def get_installed_packages():
     global pip_list
     if pip_list is None:
@@ -52,7 +52,7 @@ def get_installed_packages():
             return set()
     return pip_list
 
-# 检查包是否已安装
+# Check if a package is installed
 def is_installed(name):
     name = name.strip()
     pattern = r'([^<>!=]+)([<>!=]=?)'
@@ -61,7 +61,7 @@ def is_installed(name):
         name = match.group(1)
     return name.lower() in get_installed_packages()
 
-# 检查并安装依赖项
+# Check and install requirements
 def check_and_install_requirements(file_path):
     if os.path.exists(file_path):
         with open(file_path, 'r') as file:
