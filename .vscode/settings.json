@@ -2,6 +2,14 @@
     "cSpell.words": [
         "aiohttp",
         "boto",
-        "comfyui"
+        "ckpt",
+        "comfyui",
+        "denoise",
+        "getpreferredencoding",
+        "Hysli",
+        "laddr",
+        "psutil",
+        "safetensors",
+        "subpack"
     ]
 }
