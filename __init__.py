@@ -11,6 +11,7 @@ import boto3
 from .find_port import find_comfyui_port
 import server
 from aiohttp import web
+from PIL import Image 
 
 NODE_CLASS_MAPPINGS = {}
 NODE_DISPLAY_NAME_MAPPINGS = {}
@@ -77,6 +78,13 @@ async def upload_to_s3(base64_image, s3_config, prompt_id):
     )
 
     image_data = base64.b64decode(base64_image.split(',')[1])
+
+    # 去除 EXIF 数据
+    image = Image.open(io.BytesIO(image_data))
+    output = io.BytesIO()
+    image.save(output, format='PNG')  # 保存为 PNG 格式，去除 EXIF
+    output.seek(0)
+    
     current_timestamp = time.time()
     current_datetime = datetime.fromtimestamp(current_timestamp)
     formatted_date = current_datetime.strftime('%Y-%m-%d')
@@ -84,7 +92,7 @@ async def upload_to_s3(base64_image, s3_config, prompt_id):
     file_key_name = f"{s3_config['folder']}/{formatted_date}/{prompt_id}_{timestamp_int}.png"
 
     try:
-        s3.upload_fileobj(io.BytesIO(image_data), s3_config['bucket_name'], file_key_name)
+        s3.upload_fileobj(output, s3_config['bucket_name'], file_key_name)
         return f"{s3_config['bucket_url']}/{file_key_name}"
     except Exception as e:
         print(f"Error uploading image to S3: {str(e)}")
