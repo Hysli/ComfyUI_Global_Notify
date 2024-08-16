@@ -78,21 +78,41 @@ async def upload_to_s3(base64_image, s3_config, prompt_id):
     )
 
     image_data = base64.b64decode(base64_image.split(',')[1])
+    
+    # 压缩前大小
+    original_size = len(image_data)
 
     # 去除 EXIF 数据
     image = Image.open(io.BytesIO(image_data))
     output = io.BytesIO()
-    image.save(output, format='PNG')  # 保存为 PNG 格式，去除 EXIF
-    output.seek(0)
     
+    # 保存为 JPEG 格式，设置质量并优化
+    image.save(output, format='JPEG', quality=92, progressive=True, optimize=True)
+    output.seek(0)
+
+    # 压缩后大小
+    compressed_size = output.getbuffer().nbytes
+
+    # 记录上传时间
+    upload_start_time = time.time()
+
+    # 打印日志
+    print(f"Original size: {original_size} bytes, Compressed size: {compressed_size} bytes")
+
     current_timestamp = time.time()
     current_datetime = datetime.fromtimestamp(current_timestamp)
     formatted_date = current_datetime.strftime('%Y-%m-%d')
     timestamp_int = int(current_timestamp)
-    file_key_name = f"{s3_config['folder']}/{formatted_date}/{prompt_id}_{timestamp_int}.png"
+    file_key_name = f"{s3_config['folder']}/{formatted_date}/{prompt_id}_{timestamp_int}.jpg"
 
     try:
         s3.upload_fileobj(output, s3_config['bucket_name'], file_key_name)
+        
+        # 记录上传结束时间
+        upload_end_time = time.time()
+        upload_duration = upload_end_time - upload_start_time
+        
+        print(f"Uploaded {file_key_name} in {upload_duration:.2f} seconds.")
         return f"{s3_config['bucket_url']}/{file_key_name}"
     except Exception as e:
         print(f"Error uploading image to S3: {str(e)}")
