@@ -196,6 +196,24 @@ async def handle_s3_upload_and_callback(result, callback_url, s3_config):
             else:
                 print(f"Callback failed with status code: {response.status}")
 
+async def process_images_and_upload(res_task, callback_url, s3_config):
+    result = await get_images(res_task['prompt_id'])
+    total_time = await get_execution_times(res_task['prompt_id'])
+    result["total_time"] = total_time["total_time"]
+    
+    if s3_config['enabled']:
+        upload_results = await upload_to_s3(result['images'], s3_config, result['prompt_id'])
+        result['images'] = upload_results
+
+    data = json.dumps(result).encode('utf-8')
+    headers = {'content-type': 'application/json'}
+    async with aiohttp.ClientSession() as session:
+        async with session.post(callback_url, data=data, headers=headers) as response:
+            if response.status == 200:
+                print("Callback successful")
+            else:
+                print(f"Callback failed with status code: {response.status}")
+
 @server.PromptServer.instance.routes.post("/prompt_queue")
 async def prompt_queue(request):
     try:
@@ -214,11 +232,10 @@ async def prompt_queue(request):
         })
 
         res_task = await queue_prompt(prompt)
-        # 调用 get_images 来获取图像
-        result = await get_images(res_task['prompt_id'])
-        total_time = await get_execution_times(res_task['prompt_id'])
-        result["total_time"] = total_time["total_time"]
-        asyncio.create_task(handle_s3_upload_and_callback(result, callback_url, s3_config))
-        return web.json_response(result)
+
+        # 创建一个异步任务来处理获取图像和上传
+        asyncio.create_task(process_images_and_upload(res_task, callback_url, s3_config))
+
+        return web.json_response(res_task)
     except Exception as e:
         return web.Response(text=json.dumps({"error": str(e)}), status=500)
