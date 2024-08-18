@@ -99,6 +99,7 @@ async def get_execution_times(prompt_id):
                 return {"error": "Prompt ID not found."}
 
 async def upload_to_s3(output_images, s3_config, prompt_id):
+    loop = asyncio.get_event_loop()
     s3 = boto3.client(
         service_name="s3",
         endpoint_url=s3_config['endpoint_url'],
@@ -140,8 +141,8 @@ async def upload_to_s3(output_images, s3_config, prompt_id):
                 timestamp_int = int(current_timestamp)
                 file_key_name = f"{s3_config['folder']}/{formatted_date}/{prompt_id}_{node_id}_{timestamp_int}.jpg"
 
-                # 上传到 S3
-                s3.upload_fileobj(output, s3_config['bucket_name'], file_key_name)
+                # 使用线程池来进行上传
+                await loop.run_in_executor(None, s3.upload_fileobj, output, s3_config['bucket_name'], file_key_name)
                 
                 # 记录上传结束时间
                 upload_end_time = time.time()
