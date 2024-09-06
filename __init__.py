@@ -53,26 +53,26 @@ async def queue_prompt(prompt):
     """Submit prompt to the server and return the server response."""
     data = json.dumps({"prompt": prompt}).encode('utf-8')
     async with aiohttp.ClientSession() as session:
-        async with session.post(f"http://{SERVER_ADDRESS}/prompt", data=data) as response:
+        async with session.post(f"http://{SERVER_ADDRESS}/prompt", data=data, proxy=None) as response:
             return await response.json()
 
 async def get_image(filename, subfolder, folder_type):
     """Retrieve image data from the server."""
     data = {"filename": filename, "subfolder": subfolder, "type": folder_type}
     async with aiohttp.ClientSession() as session:
-        async with session.get(f"http://{SERVER_ADDRESS}/view", params=data) as response:
+        async with session.get(f"http://{SERVER_ADDRESS}/view", params=data, proxy=None) as response:
             return await response.read()
 
 async def get_history(prompt_id):
     """Retrieve history of the specified prompt from the server."""
     async with aiohttp.ClientSession() as session:
-        async with session.get(f"http://{SERVER_ADDRESS}/history/{prompt_id}") as response:
+        async with session.get(f"http://{SERVER_ADDRESS}/history/{prompt_id}", proxy=None) as response:
             return await response.json()
 
 async def get_execution_times(prompt_id):
     """Retrieve execution start and end times for the specified prompt ID."""
     async with aiohttp.ClientSession() as session:
-        async with session.get(f"http://{SERVER_ADDRESS}/history/{prompt_id}") as response:
+        async with session.get(f"http://{SERVER_ADDRESS}/history/{prompt_id}", proxy=None) as response:
             data = await response.json()
 
             # 获取特定的 prompt 数据
@@ -191,7 +191,7 @@ async def handle_s3_upload_and_callback(result, callback_url, s3_config):
     data = json.dumps(result).encode('utf-8')
     headers = {'content-type': 'application/json'}
     async with aiohttp.ClientSession() as session:
-        async with session.post(callback_url, data=data, headers=headers) as response:
+        async with session.post(callback_url, data=data, headers=headers, proxy=None) as response:
             if response.status == 200:
                 print("Callback successful")
             else:
@@ -209,7 +209,7 @@ async def process_images_and_upload(res_task, callback_url, s3_config):
     data = json.dumps(result).encode('utf-8')
     headers = {'content-type': 'application/json'}
     async with aiohttp.ClientSession() as session:
-        async with session.post(callback_url, data=data, headers=headers) as response:
+        async with session.post(callback_url, data=data, headers=headers, proxy=None) as response:
             if response.status == 200:
                 print("Callback successful")
             else:
