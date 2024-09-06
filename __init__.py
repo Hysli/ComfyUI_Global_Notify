@@ -8,7 +8,6 @@ from datetime import datetime
 import base64
 import asyncio
 import boto3
-from .find_port import find_comfyui_port
 import server
 from aiohttp import web
 from PIL import Image 
@@ -17,40 +16,15 @@ NODE_CLASS_MAPPINGS = {}
 NODE_DISPLAY_NAME_MAPPINGS = {}
 __all__ = ['NODE_CLASS_MAPPINGS', 'NODE_DISPLAY_NAME_MAPPINGS']
 
-port = "8188"
-SERVER_ADDRESS = f"127.0.0.1:{port}"
 defaultQuality=92
-
-current_directory = os.path.dirname(os.path.abspath(__file__))
-server_address_file = os.path.join(current_directory, 'server_address.txt')
 
 global start_time
 global end_time
-
-def read_server_address():
-    global SERVER_ADDRESS
-    if os.path.exists(server_address_file):
-        with open(server_address_file, 'r') as f:
-            SERVER_ADDRESS = f.read().strip()
-    # print("Read SERVER_ADDRESS from file:", SERVER_ADDRESS)
-
-read_server_address()
-
-def update_server_address():
-    global SERVER_ADDRESS
-    comfyui_port = find_comfyui_port()
-    if comfyui_port:
-        SERVER_ADDRESS = f"127.0.0.1:{comfyui_port}"
-    # print("Updated SERVER_ADDRESS:", SERVER_ADDRESS)
-
-def write_server_address():
-    with open(server_address_file, 'w') as f:
-        f.write(SERVER_ADDRESS)
+global SERVER_ADDRESS
 
 async def queue_prompt(prompt):
-    update_server_address()
-    write_server_address()
     """Submit prompt to the server and return the server response."""
+    global SERVER_ADDRESS
     data = json.dumps({"prompt": prompt}).encode('utf-8')
     async with aiohttp.ClientSession() as session:
         async with session.post(f"http://{SERVER_ADDRESS}/prompt", data=data, proxy=None) as response:
@@ -58,6 +32,7 @@ async def queue_prompt(prompt):
 
 async def get_image(filename, subfolder, folder_type):
     """Retrieve image data from the server."""
+    global SERVER_ADDRESS
     data = {"filename": filename, "subfolder": subfolder, "type": folder_type}
     async with aiohttp.ClientSession() as session:
         async with session.get(f"http://{SERVER_ADDRESS}/view", params=data, proxy=None) as response:
@@ -65,12 +40,14 @@ async def get_image(filename, subfolder, folder_type):
 
 async def get_history(prompt_id):
     """Retrieve history of the specified prompt from the server."""
+    global SERVER_ADDRESS
     async with aiohttp.ClientSession() as session:
         async with session.get(f"http://{SERVER_ADDRESS}/history/{prompt_id}", proxy=None) as response:
             return await response.json()
 
 async def get_execution_times(prompt_id):
     """Retrieve execution start and end times for the specified prompt ID."""
+    global SERVER_ADDRESS
     async with aiohttp.ClientSession() as session:
         async with session.get(f"http://{SERVER_ADDRESS}/history/{prompt_id}", proxy=None) as response:
             data = await response.json()
@@ -133,7 +110,7 @@ async def upload_to_s3(output_images, s3_config, prompt_id):
                 upload_start_time = time.time()
 
                 # 打印日志
-                print(f"Original size: {original_size} bytes")
+                print(f"Original size: {original_size} bytes, Compressed size: {len(output.getvalue())} bytes")
 
                 current_timestamp = time.time()
                 current_datetime = datetime.fromtimestamp(current_timestamp)
@@ -217,8 +194,10 @@ async def process_images_and_upload(res_task, callback_url, s3_config):
 
 @server.PromptServer.instance.routes.post("/prompt_queue")
 async def prompt_queue(request):
+    global SERVER_ADDRESS
     try:
         data = await request.json()  # Get POST data from the request
+        SERVER_ADDRESS=request.host
         prompt = data['prompt']
         callback_url = data['callback_url']
         s3_config = data.get('s3_config', {
